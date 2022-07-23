@@ -24,7 +24,10 @@
     global IsNotifyShowing := False
     global IsCreepsWaveShowing := False
     global IsBossWaveShowing := False
+    global IsFreeTimeWaveShowing := False
+    global IsListOfWavesShowing := False
     global PreviousMinute := 0
+    IniRead, OutputDelay, settings.ini, UserSettings, scriptdelay
 }
 
 ; Only Initialization
@@ -87,9 +90,9 @@ If (!InitGUI)
         Gui, Add, Checkbox, vActivateBassWaveInfo, Только босс
         Gui, Add, Checkbox, vActivateFreeTimeWaveInfo, Только Free Time
         Gui, Add, Checkbox, vActivateFasterCreepsTiming, Быстрые крипы
-        Gui, Add, Checkbox, vActivateNotIfy1WaveInfo, 1 вышка
-        Gui, Add, Checkbox, vActivateNotIfy2WavesInfo, 2 вышка
-        Gui, Add, Checkbox, vActivateNotIfy3WavesInfo, 3 вышка
+        Gui, Add, Checkbox, vActivateNotify1WaveInfo, 1 вышка
+        Gui, Add, Checkbox, vActivateNotify2WaveInfo, 2 вышка
+        Gui, Add, Checkbox, vActivateNotify3WaveInfo, 3 вышка
     ; Tab Section End
 
     ; GuiMain Continue
@@ -110,6 +113,7 @@ OnAccept(Server) {
 	Sock := Server.Accept()
     ; Temporary text request
     TmpText := Sock.RecvText()
+    Sock.SendText("HTTP/2.1 200 OK`nContent-Type: text/html")
     ; 252 - start JSON quotes
     StrCopy := SubStr(TmpText, 252)
     ; Generate JSON GameData
@@ -120,15 +124,39 @@ OnAccept(Server) {
     TmpGold := ("0" . TmpGold) , TmpGold += 0
     TmpMinutes := ("0" . TmpMinutes) , TmpMinutes += 0, TmpMinutes := TmpMinutes//60
     TmpSeconds := ("0" . TmpSeconds) , TmpSeconds += 0, TmpSeconds := Mod(TmpSeconds, 60)
-
+    ; Dropping incorrect data
+    If (TmpSeconds == 0)
+    {
+        return
+    }
     ; Setting GameTime and GoldText GUI
-    GuiControl,, GameTime, Время: %TmpMinutes%:%TmpSeconds%
+    If (TmpMinutes < 10 And TmpSeconds < 10)
+    {
+        GuiControl,, GameTime, Время: 0%TmpMinutes%:0%TmpSeconds%
+    } Else
+    {
+        If (TmpMinutes < 10)
+        {
+            GuiControl,, GameTime, Время: 0%TmpMinutes%:%TmpSeconds%
+        } Else
+        {
+            If (TmpSeconds < 10)
+            {
+                GuiControl,, GameTime, Время: %TmpMinutes%:0%TmpSeconds%
+            } Else
+            {
+                GuiControl,, GameTime, Время: %TmpMinutes%:%TmpSeconds%
+            }
+        }
+    }
+    ; GuiControl,, GameTime, Время: %TmpMinutes%:%TmpSeconds%
     GuiControl,, GoldText, Золото: %TmpGold%
 
     ; Getting all variable for main functionality
     GuiControlGet, ClickInActiveStatus,, ActivateInActiveWindowBuy
     GuiControlGet, ClickInInactiveStatus,, ActivateInInactiveWindowBuy
     GuiControlGet, ActivateGlobalStatus,, ActivateGlobal
+    GuiControlGet, ActivateHeroHelperStatus,, ActivateHeroHelper
     IniRead, OutputGoldLimitNum, settings.ini, UserSettings, goldlimit
     TmpGoldEdit := ("0" . OutputGoldLimitNum) , TmpGoldEdit += 0
 
@@ -150,253 +178,315 @@ OnAccept(Server) {
             BuyInInactiveWindow()
         }
     }
-
-    ; Hero Tab Functionality NOT WORKING
-    TmpHeroName = % GameData.hero.name
-    ; MsgBox, %TmpHeroName%
-    ; If TmpHeroName contains "npc_dota_hero_treant"
-    IfEqual, TmpHeroName, "npc_dota_hero_treant"
+    If (ActivateHeroHelperStatus)
     {
-        TmpCooldown = % abilities.1.cooldown
-        TmpCooldown := ("0" . TmpCooldown) , TmpCooldown += 0
-        If (TmpCooldown == 0)
+        ; Hero Tab Functionality
+        TmpHeroName := GameData.hero.name
+        IfEqual, TmpHeroName, npc_dota_hero_treant
         {
-            ShowHelpHeroMessage("Прожми дерево!")
-            IsHeroHelperShowing := True
+            TmpCooldown = % GameData.abilities.ability1.cooldown
+            TmpCooldown := ("0" . TmpCooldown) , TmpCooldown += 0
+            If (TmpCooldown == 0)
+            {
+                ShowHelpHeroMessage("Прожми дерево!")
+                IsHeroHelperShowing := True
+            }
+        } Else
+        {
+            IfEqual, TmpHeroName, npc_dota_hero_tinker
+            {
+                TmpCooldown = % GameData.abilities.ability4.cooldown
+                TmpCooldown := ("0" . TmpCooldown) , TmpCooldown += 0
+                If (TmpCooldown == 0)
+                {
+                    ShowHelpHeroMessage("Улучши башню!")
+                    IsHeroHelperShowing := True
+                }
+            } Else
+            {
+                If (IsHeroHelperShowing)
+                {
+                    Gui, ability_helper: Cancel
+                    Gui, ability_helper: Hide
+                    Gui, ability_helper: Destroy
+                    IsHeroHelperShowing := False
+                }
+            }
         }
     } Else
-    IfEqual, TmpHeroName, "npc_dota_hero_tinker"
     {
-        ShowHelpHeroMessage("Улучши башню!")
-        IsHeroHelperShowing := True
-    } Else
-    If (IsHeroHelperShowing)
-    {
-        Gui, ability_helper: Cancel
-        Gui, ability_helper: Hide
-        Gui, ability_helper: Destroy
-    }
-
-    ; Mider Helper
-    IfNotEqual, TmpMinutes, PreviousMinute
-    {
-        ; Show Waves
-        
+        If (IsHeroHelperShowing)
+        {
+            Gui, ability_helper: Cancel
+            Gui, ability_helper: Hide
+            Gui, ability_helper: Destroy
+            IsHeroHelperShowing := False
+        }
     }
     ; Main mid statuses
+    GuiControlGet, ListOfWavesStatus,, ActivateListWavesInfo
     GuiControlGet, CreepsWaveStatus,, ActivateCreepsWaveInfo
     GuiControlGet, BossWaveStatus,, ActivateBassWaveInfo
     GuiControlGet, FreeTimeWaveStatus,, ActivateFreeTimeWaveInfo
     ; Check ultra status
     GuiControlGet, FasterCreepsStatus,, ActivateFasterCreepsTiming
     ; 
-    GuiControlGet, Notify1Status,, ActivateNotIfy1WavesInfo
-    GuiControlGet, Notify2Status,, ActivateNotIfy2WavesInfo
-    GuiControlGet, Notify3Status,, ActivateNotIfy3WavesInfo
-    TmpMod5Minutes := Mod(TmpSeconds, 5)
-    TmpMod6Minutes := Mod(TmpSeconds, 6)
+    GuiControlGet, Notify1Status,, ActivateNotify1WaveInfo
+    GuiControlGet, Notify2Status,, ActivateNotify2WaveInfo
+    GuiControlGet, Notify3Status,, ActivateNotify3WaveInfo
+    TmpMod5Minutes := Mod(TmpMinutes, 5)
+    TmpMod6Minutes := Mod(TmpMinutes, 6)
+    If (TmpMinutes != PreviousMinute)
+    {
+        Gui, list_of_waves_notify: Cancel
+        Gui, list_of_waves_notify: Hide
+        Gui, list_of_waves_notify: Destroy
+        PreviousMinute = %TmpMinutes%
+        If (IsListOfWavesShowing)
+        {
+            ShowListOfWavesNotify(GenerateListOfWavesString(TmpMinutes))
+        }
+    }
+    ; Mider Helper
+    If (ListOfWavesStatus)
+    {
+        ; Show Waves
+        If (!IsListOfWavesShowing)
+        {
+            IsListOfWavesShowing := True
+            ShowListOfWavesNotify(GenerateListOfWavesString(TmpMinutes))
+        }
+    } Else
+    {
+        If (IsListOfWavesShowing)
+        {
+            IsListOfWavesShowing := False
+            Gui, list_of_waves_notify: Cancel
+            Gui, list_of_waves_notify: Hide
+            Gui, list_of_waves_notify: Destroy
+        }
+    }
     If (FasterCreepsStatus)
     {
         If (Notify1Status And TmpSeconds >= 10 And TmpSeconds <= 12 &&
         !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
         {
             ; Show Notify1
-            ShowNotify1()
-        }
-        Else
-        {
-            If(IsNotifyShowing)
+            If (!IsNotifyShowing)
             {
-                IsNotifyShowing := False
+                IsNotifyShowing := True
+                ShowNotify("Башня 1", 50)
             }
         }
-        If (Notify2Status And TmpSeconds >= 23 And TmpSeconds <= 25 &&
-        !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
-        {
-            ; Show Notify2
-            ShowNotify2()
-        }
         Else
         {
 
-        }
-        If (Notify3Status And TmpSeconds >= 31 And TmpSeconds <= 33 &&
-        !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
-        {
-            ; Show Notify3
-            ShowNotify3()
-        }
-        Else
-        {
-            If(IsNotifyShowing)
+            If (Notify2Status And TmpSeconds >= 23 And TmpSeconds <= 25 &&
+            !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
             {
-                IsNotifyShowing := False
+                ; Show Notify2
+                If (!IsNotifyShowing)
+                {
+                    IsNotifyShowing := True
+                    ShowNotify("Башня 2", 90)
+                }
             }
-        }
-        If (BossWaveStatus And TmpMod5Minutes == 0)
-        {
-            ; Show Boss Wave
-
-        }
-        Else
-        {
-            If(IsNotifyShowing)
+            Else
             {
-                IsNotifyShowing := False
-            }
-        }
-        If (CreepsWaveStatus And TmpMod5Minutes != 0 && TmpMod6Minutes != 0)
-        {
-            ; Show Creeps Wave
-
-        }
-        Else
-        {
-
-        }
-        If (FreeTimeWaveStatus And TmpMod5Minutes != 0 && TmpMod6Minutes == 0)
-        {
-            ; Show Free Time
-
-        }
-        Else
-        {
-            If(IsNotifyShowing)
-            {
-                IsNotifyShowing := False
+                If (Notify3Status And TmpSeconds >= 31 And TmpSeconds <= 33 &&
+                !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
+                {
+                    If (!IsNotifyShowing)
+                    {
+                        IsNotifyShowing := True
+                        ShowNotify("Башня 3", 120)
+                    }
+                }
+                Else
+                {
+                    If(IsNotifyShowing)
+                    {
+                        IsNotifyShowing := False
+                        Gui, notify: Cancel
+                        Gui, notify: Hide
+                        Gui, notify: Destroy
+                    }
+                }
             }
         }
     }
     Else
     {
-        If (Notify1Status And TmpSeconds >= 17 And TmpSeconds <= 19 &&
+        If (Notify1Status And TmpSeconds >= 20 And TmpSeconds <= 22 &&
         !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
         {
             ; Show Notify1
-            ShowNotify1()
-        } 
-        Else
-        {
-
-        }
-        If (Notify2Status And TmpSeconds >= 31 And TmpSeconds <= 33 &&
-        !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
-        {
-            ; Show Notify2
-            ShowNotify2()
+            If (!IsNotifyShowing)
+            {
+                IsNotifyShowing := True
+                ShowNotify("Башня 1", 50)
+            }
         }
         Else
         {
-
-        }
-        If (Notify3Status And TmpSeconds >= 42 And TmpSeconds <= 44 &&
-        !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
-        {
-            ; Show Notify3
-            ShowNotify3()
-        }
-        Else
-        {
-
-        }
-        If (BossWaveStatus And TmpMod5Minutes == 0)
-        {
-            ; Show Boss Wave
-
-        }
-        Else
-        {
-
-        }
-        If (CreepsWaveStatus And TmpMod5Minutes != 0 && TmpMod6Minutes != 0)
-        {
-            ; Show Creeps Wave
-
-        }
-        Else
-        {
-
-        }
-        If (FreeTimeWaveStatus And TmpMod5Minutes != 0 && TmpMod6Minutes == 0)
-        {
-            ; Show Free Time
-
-        }
-        Else
-        {
-
+            If (Notify2Status And TmpSeconds >= 27 And TmpSeconds <= 29 &&
+            !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
+            {
+                ; Show Notify2
+                If (!IsNotifyShowing)
+                {
+                    IsNotifyShowing := True
+                    ShowNotify("Башня 2", 90)
+                }
+            }
+            Else
+            {
+                If (Notify3Status And TmpSeconds >= 39 And TmpSeconds <= 41 &&
+                !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
+                {
+                    ; Show Notify3
+                    If (!IsNotifyShowing)
+                    {
+                        IsNotifyShowing := True
+                        ShowNotify("Башня 3", 120)
+                    }
+                }
+                Else
+                {
+                    If (IsNotifyShowing)
+                    {
+                        IsNotifyShowing := False
+                        Gui, notify: Cancel
+                        Gui, notify: Hide
+                        Gui, notify: Destroy
+                    }
+                }
+            }
         }
     }
-    ; Disconnect Socket If DC_SERV is False
+    If (BossWaveStatus And TmpMod5Minutes == 0)
+    {
+        ; Show Boss Wave
+        If (!IsBossWaveShowing)
+        {
+            IsBossWaveShowing := True
+            ShowBossWaveNotify()
+        }
+    }
+    Else
+    {
+        If (IsBossWaveShowing)
+        {
+            IsBossWaveShowing := False
+            Gui, boss_wave_notify: Cancel
+            Gui, boss_wave_notify: Hide
+            Gui, boss_wave_notify: Destroy
+        }
+    }
+    If (CreepsWaveStatus And TmpMod5Minutes != 0 && TmpMod6Minutes != 0)
+    {
+        ; Show Creeps Wave
+        If (!IsCreepsWaveShowing)
+        {
+            IsCreepsWaveShowing := True
+            ShowCreepsWaveNotify()
+        }
+    }
+    Else
+    {
+        If (IsCreepsWaveShowing)
+        {
+            IsCreepsWaveShowing := False
+            Gui, creeps_wave_notify: Cancel
+            Gui, creeps_wave_notify: Hide
+            Gui, creeps_wave_notify: Destroy
+        }
+    }
+    If (FreeTimeWaveStatus And TmpMod5Minutes != 0 && TmpMod6Minutes == 0)
+    {
+        ; Show Free Time
+        If (!IsFreeTimeWaveShowing)
+        {
+            IsFreeTimeWaveShowing := True
+            ShowFreetimeWaveNotify()
+        }
+    }
+    Else
+    {
+        If (IsFreeTimeWaveShowing)
+        {
+            IsFreeTimeWaveShowing := False
+            Gui, freetime_wave_notify: Cancel
+            Gui, freetime_wave_notify: Hide
+            Gui, freetime_wave_notify: Destroy
+        }
+    }
+    ; Disconnect Socket If DC_SERV is True
 	If (DC_SERV)
 		Sock.Disconnect()
+    Sleep, %OutputDelay%
+    ; MsgBox, Aboba
     return
 }
 
-ShowNotify1()
+ShowNotify(message, size)
 {
     CustomColor = FFFFFF
-    Gui, notify1: +LastFound +AlwaysOnTop -Caption +ToolWindow
-    Gui, notify1: Color, %CustomColor%
-    Gui, notify1: Font, s50
-    Gui, notify1: Add, Text, cYellow, Башня 1
+    Gui, notify: +LastFound +AlwaysOnTop -Caption +ToolWindow
+    Gui, notify: Color, %CustomColor%
+    Gui, notify: Font, s%size%
+    Gui, notify: Add, Text, cYellow, %message%
     WinSet, TransColor, %CustomColor% 200
-    Gui, notify1: Show, xCenter y100 NoActivate
-}
-
-ShowNotify2()
-{
-    CustomColor = FFFFFF
-    Gui, notify2: +LastFound +AlwaysOnTop -Caption +ToolWindow
-    Gui, notify2: Color, %CustomColor%
-    Gui, notify2: Font, s90
-    Gui, notify2: Add, Text, cYellow, Башня 2
-    WinSet, TransColor, %CustomColor% 200
-    Gui, notify2: Show, xCenter y100 NoActivate
-}
-
-ShowNotify3()
-{
-    CustomColor = FFFFFF
-    Gui, notify3: +LastFound +AlwaysOnTop -Caption +ToolWindow
-    Gui, notify3: Color, %CustomColor%
-    Gui, notify3: Font, s120
-    Gui, notify3: Add, Text, cYellow, Башня 3
-    WinSet, TransColor, %CustomColor% 200
-    Gui, notify3: Show, xCenter y100 NoActivate
+    Gui, notify: Show, xCenter y100 NoActivate
+    return
 }
 
 ShowCreepsWaveNotify()
 {
     CustomColor = FFFFFF
-    Gui, notify2: +LastFound +AlwaysOnTop -Caption +ToolWindow
-    Gui, notify2: Color, %CustomColor%
-    Gui, notify2: Font, s90
-    Gui, notify2: Add, Text, cYellow, Крипы
-    WinSet, TransColor, %CustomColor% 200
-    Gui, notify2: Show, xCenter y100 NoActivate
+    Gui, creeps_wave_notify: +LastFound +AlwaysOnTop -Caption +ToolWindow
+    Gui, creeps_wave_notify: Color, %CustomColor%
+    Gui, creeps_wave_notify: Font, s40
+    Gui, creeps_wave_notify: Add, Text, cYellow, Крипы
+    WinSet, TransColor, %CustomColor% 150
+    Gui, creeps_wave_notify: Show, x0 yCenter NoActivate
+    return
 }
 
 ShowBossWaveNotify()
 {
     CustomColor = FFFFFF
-    Gui, notify2: +LastFound +AlwaysOnTop -Caption +ToolWindow
-    Gui, notify2: Color, %CustomColor%
-    Gui, notify2: Font, s90
-    Gui, notify2: Add, Text, cYellow, Босс
-    WinSet, TransColor, %CustomColor% 200
-    Gui, notify2: Show, xCenter y100 NoActivate
+    Gui, boss_wave_notify: +LastFound +AlwaysOnTop -Caption +ToolWindow
+    Gui, boss_wave_notify: Color, %CustomColor%
+    Gui, boss_wave_notify: Font, s40
+    Gui, boss_wave_notify: Add, Text, cRed, Босс
+    WinSet, TransColor, %CustomColor% 150
+    Gui, boss_wave_notify: Show, x0 yCenter NoActivate
+    return
 }
 
 ShowFreetimeWaveNotify()
 {
     CustomColor = FFFFFF
-    Gui, notify2: +LastFound +AlwaysOnTop -Caption +ToolWindow
-    Gui, notify2: Color, %CustomColor%
-    Gui, notify2: Font, s90
-    Gui, notify2: Add, Text, cYellow, Freetime
-    WinSet, TransColor, %CustomColor% 200
-    Gui, notify2: Show, xCenter y100 NoActivate
+    Gui, freetime_wave_notify: +LastFound +AlwaysOnTop -Caption +ToolWindow
+    Gui, freetime_wave_notify: Color, %CustomColor%
+    Gui, freetime_wave_notify: Font, s40
+    Gui, freetime_wave_notify: Add, Text, cGreen, Freetime
+    WinSet, TransColor, %CustomColor% 150
+    Gui, freetime_wave_notify: Show, x0 yCenter NoActivate
+    return
+}
+
+ShowListOfWavesNotify(message)
+{
+    CustomColor = FFFFFF
+    Gui, list_of_waves_notify: +LastFound +AlwaysOnTop -Caption +ToolWindow
+    Gui, list_of_waves_notify: Color, %CustomColor%
+    Gui, list_of_waves_notify: Font, s30
+    Gui, list_of_waves_notify: Add, Text, cGreen, %message%
+    WinSet, TransColor, %CustomColor% 150
+    Gui, list_of_waves_notify: Show, x50 y50 NoActivate
+    return
 }
 
 ShowHelpHeroMessage(message)
@@ -408,6 +498,7 @@ ShowHelpHeroMessage(message)
     Gui, ability_helper: Add, Text, cYellow, %message%
     WinSet, TransColor, %CustomColor% 255
     Gui, ability_helper: Show, xCenter y600 NoActivate
+    return
 }
 
 ; Toggle Activate Clicker
@@ -447,19 +538,19 @@ BuyInActiveWindow()
 {
     IfWinActive, Dota 2
     {
-        SetKeyDelay 60
+        SetKeyDelay 400
         IniRead, OutputInt, settings.ini, UserSettings, hotkeybuy
         Send, {Alt up}
         Send, {%OutputInt% down}
         Send, {%OutputInt% up}
-        return
     }
+    return
 }
 
 ; Buy in Inactive Window
 BuyInInactiveWindow()
 {
-    SetKeyDelay 60
+    SetKeyDelay 400
     IfWinExist, Dota 2
     {
         IniRead, OutputInt, settings.ini, UserSettings, hotkeybuy
@@ -550,6 +641,7 @@ ShowHelp(wParam, lParam, Msg)
             ToolTip
         }
     }
+    return
 }
 
 ; Convert Hotkey code to Text for text fields
@@ -577,6 +669,35 @@ HotkeyToText(String)
     }
     TmpString .= SubStr(String, TmpCounter)
     return TmpString
+}
+
+GenerateListOfWavesString(IntMinutes)
+{
+    TmpStringListOfWaves := ""
+    Loop, 6
+    {
+        TmpStringIndex := % A_Index-1
+        FinalIndex := TmpStringIndex + IntMinutes
+        TmpMod5FinalIndex := Mod(FinalIndex, 5)
+        TmpMod6FinalIndex := Mod(FinalIndex, 6)
+        If (TmpMod5FinalIndex == 0)
+        {
+            TmpStringListOfWaves .= FinalIndex
+            TmpStringListOfWaves .= " - Босс`n"
+        } Else
+        {
+            If (TmpMod6FinalIndex == 0)
+            {
+                TmpStringListOfWaves .= FinalIndex
+                TmpStringListOfWaves .= " - Freetime`n"
+            } Else 
+            {
+                TmpStringListOfWaves .= FinalIndex
+                TmpStringListOfWaves .= " - Крипы`n"
+            }
+        }
+    }
+    return TmpStringListOfWaves
 }
 
 ; Save click event
