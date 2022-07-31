@@ -213,7 +213,7 @@ SaveScript:
         `nGui, Font, s20  ; Set a large font size (32-point).
         `nGui, Add, Text, vMyText cLime, Воспроизведение...Ctrl+S для ОСТАНОВКИ
         `nWinSet, TransColor, `%CustomColor`% 150
-        `nGui, Show, x100 y400 NoActivate
+        `nGui, Show, x100 y100 NoActivate
         `nloop:=1
         `nwhile(loop = 1)
         `n{

@@ -210,6 +210,15 @@ OnAccept(Server) {
             {
                 ShowHelpHeroMessage("Прожми дерево!")
                 IsHeroHelperShowing := True
+            } Else 
+            {
+                If (IsHeroHelperShowing)
+                {
+                    Gui, ability_helper: Cancel
+                    Gui, ability_helper: Hide
+                    Gui, ability_helper: Destroy
+                    IsHeroHelperShowing := False
+                }
             }
         } Else
         {
@@ -221,6 +230,15 @@ OnAccept(Server) {
                 {
                     ShowHelpHeroMessage("Улучши башню!")
                     IsHeroHelperShowing := True
+                } Else
+                {
+                    If (IsHeroHelperShowing)
+                    {
+                        Gui, ability_helper: Cancel
+                        Gui, ability_helper: Hide
+                        Gui, ability_helper: Destroy
+                        IsHeroHelperShowing := False
+                    }
                 }
             } Else
             {

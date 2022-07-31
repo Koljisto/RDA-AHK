@@ -25,10 +25,10 @@ MouseSpeed := 2
 CustomColor = FFFFFF  ; Can be any RGB color (it will be made transparent below).
 Gui, startnotify: +LastFound +AlwaysOnTop -Caption +ToolWindow  ; +ToolWindow avoids a taskbar button and an alt-tab menu item.
 Gui, startnotify: Color, %CustomColor%
-Gui, startnotify: Font, s32  ; Set a large font size (32-point).
+Gui, startnotify: Font, s20  ; Set a large font size (32-point).
 Gui, startnotify: Add, Text, vStartText cRed, Нажмите...Ctrl+R для СТАРТА ЗАПИСИ  ; XX & YY serve to auto-size the window.
 WinSet, TransColor, %CustomColor% 150
-Gui, startnotify: Show, x100 y400 NoActivate
+Gui, startnotify: Show, x100 y100 NoActivate
 
 #Persistent
 CoordMode, ToolTip, Screen
@@ -54,10 +54,10 @@ Gui, startnotify: Destroy
 
 Gui stopnotify: +LastFound +AlwaysOnTop -Caption +ToolWindow  ; +ToolWindow avoids a taskbar button and an alt-tab menu item.
 Gui, stopnotify: Color, %CustomColor%
-Gui, stopnotify: Font, s32  ; Set a large font size (32-point).
+Gui, stopnotify: Font, s20  ; Set a large font size (32-point).
 Gui, stopnotify: Add, Text, vStopText cLime, Идёт запись...Ctrl+D для ОСТАНОВКИ  ; XX & YY serve to auto-size the window.
 WinSet, TransColor, %CustomColor% 150
-Gui, stopnotify: Show, x100 y400 NoActivate  ; NoActivate avoids deactivating the currently active window.
+Gui, stopnotify: Show, x100 y100 NoActivate  ; NoActivate avoids deactivating the currently active window.
 
 recording := true
 while(recording = true)
@@ -82,10 +82,10 @@ while(recording = true)
 
 			`nGui +LastFound +AlwaysOnTop -Caption +ToolWindow
 			`nGui, Color, %CustomColor%
-			`nGui, Font, s32  ; Set a large font size (32-point).
+			`nGui, Font, s20  ; Set a large font size (32-point).
 			`nGui, Add, Text, vMyText cLime, Воспроизведение...Ctrl+S для ОСТАНОВКИ
 			`nWinSet, TransColor, %CustomColor% 150
-			`nGui, Show, x100 y400 NoActivate
+			`nGui, Show, x100 y100 NoActivate
 			`nloop:=1
 			`nwhile(loop = 1)
 			`n{
