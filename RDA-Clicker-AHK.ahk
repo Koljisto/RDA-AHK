@@ -18,7 +18,6 @@
     global DC_SERV := True
     global DC_CLI := False
     ; Initial Variables
-    global InitGUI := False
     global IsToolTipShowing := False
     global IsHeroHelperShowing := False
     global IsNotifyShowing := False
@@ -27,85 +26,106 @@
     global IsFreeTimeWaveShowing := False
     global IsListOfWavesShowing := False
     global PreviousMinute := 0
+    FileEncoding, CP65001
     IniRead, OutputDelay, settings.ini, UserSettings, scriptdelay
 }
 
-; Only Initialization
-If (!InitGUI)
+
+InitGUI:
 {
-    ; Server connect info
-    Server := new SocketTCP()
-    Server.OnAccept := Func("OnAccept")
-    IniRead, OutputPortBind, settings.ini, SystemSettings, port
-    Server.Bind(["127.0.0.1", OutputPortBind])
     ; Help event 0x200 - if mouse event equal change window element call func Help
     OnMessage(0x200, "ShowHelp")
     Menu, Main_Submenu, Add, О программе, About_Menu
     Menu, GuiMain_MenuBar, Add, Меню, :Main_Submenu
+    Gui, MainGui: New
+    Gui, Menu, GuiMain_MenuBar
     ; GuiMain Start
-    Gui, Add, Checkbox, vActivateClickerPrompt, Включить подсказки
-    Gui, Add, Checkbox, vActivateGlobal, Включить
-    Gui, Add, Text,, Клавиша включения:
+    Gui, Add, Checkbox, x12 y9 w250 h20 vActivateClickerPrompt, Включить подсказки
+    Gui, Add, Checkbox, x12 y29 w250 h20 vActivateGlobal, Включить
+    Gui, Add, Text, x12 y49 w250 h20, Клавиша включения:
     IniRead, OutputKeyBind, settings.ini, UserSettings, activateclicker
-    Gui, Add, Hotkey, vHotkeyActivateGlobal, %OutputKeyBind%
+    Gui, Add, Hotkey, x12 y69 w250 h20 vHotkeyActivateGlobal, %OutputKeyBind%
 
     ; Tab Section Start
-        Gui, Add, Tab3, w200, Главная|Герой|Скрипты|Мидер
+        Gui, Add, Tab3, x12 y89 w250 h200 , Главная|Герой|Скрипты|Мидер
 
         ; Main
-        Gui, Add, Text, cBlue, Автопокупка:
-        Gui, Add, Checkbox, vActivateInActiveWindowBuy, В активном окне
-        Gui, Add, Checkbox, vActivateInInactiveWindowBuy, Не в активном окне
-        Gui, Add, Checkbox, vActivateHiddenGame gToggleTransparentWindow, Скрыть Dota 2
-        Gui, Add, Text,, Золото:
+        Gui, Add, Text, x22 y119 w120 h20 cBlue, Автопокупка:
+        Gui, Add, Checkbox, x22 y139 w120 h20 vActivateInActiveWindowBuy, В активном окне
+        Gui, Add, Checkbox, x22 y159 w120 h20 vActivateInInactiveWindowBuy, Не в активном окне
+        Gui, Add, Checkbox, x22 y179 w120 h20 vActivateHiddenGame gToggleTransparentWindow, Скрыть Dota 2
+        Gui, Add, Text, x22 y199 w120 h20, Золото:
         IniRead, OutputInt, settings.ini, UserSettings, goldlimit
-        Gui, Add, Edit, r1 vGoldLimitEdit w100, %OutputInt%
-        Gui, Add, Text,, Клавиша закупки:
+        Gui, Add, Edit, r1 vGoldLimitEdit x22 y219 w120 h20 , %OutputInt%
+        Gui, Add, Text, x22 y239 w120 h20 , Клавиша закупки:
         IniRead, OutputKeyBind, settings.ini, UserSettings, hotkeybuy
-        Gui, Add, Hotkey, vHotkeyBuy, %OutputKeyBind%
+        Gui, Add, Hotkey, x22 y259 w120 h20 vHotkeyBuy, %OutputKeyBind%
+
 
         ; Hero
         Gui, Tab, Герой
-        Gui, Add, Text, cGreen, Помошник по героям:
-        Gui, Add, Checkbox, vActivateHeroHelper, Скиллы
+        Gui, Add, Text, x22 y119 w120 h20 cGreen, Помошник по героям:
+        Gui, Add, Checkbox, x22 y139 w120 h20 vActivateHeroHelper, Скиллы
+        Gui, Add, Checkbox, x22 y159 w120 h20 vActivateHeroBuildHelper, Билд
 
         ; Scripts
         Gui, Tab, Скрипты
-        Gui, Add, Text, cFuchsia, Список скриптов:
+        Gui, Add, Text, x22 y119 w100 h20 cFuchsia, Список скриптов:
         Tmp_List := ""
         Loop, Files, Scripts\*.*, R
         {
             Tmp_List .= A_LoopFileShortName
             Tmp_List .= "|"
         }
-        Gui, Add, ListBox, r10 vColorChoice, %Tmp_List%
-        Gui, Add, Button,, Записать скрипт
-        Gui, Add, Button, Default, Запустить скрипт
+        Gui, Add, ListBox, x22 y139 w80 h110 r10 vScriptsListBox, %Tmp_List%
+        Gui, Add, Button, x112 y139 w140 h20 gRecordScript, Записать скрипт
+        Gui, Add, Button, x112 y159 w140 h20 gEasyRecordScript, Записать скрипт (Легко)
+        Gui, Add, Button, x112 y179 w140 h20 gAddScript, Добавить скрипт
+        Gui, Add, Button, x112 y199 w140 h20 gDeleteScript, Удалить скрипт
+        Gui, Add, Button, x112 y229 w140 h20 gRunScript Default, Запустить скрипт
 
         ; Mider
         Gui, Tab, Мидер
-        Gui, Add, Text, cOlive, Уведомления:
-        Gui, Add, Checkbox, vActivateListWavesInfo, Список волн
-        Gui, Add, Checkbox, vActivateCreepsWaveInfo, Только крипы
-        Gui, Add, Checkbox, vActivateBassWaveInfo, Только босс
-        Gui, Add, Checkbox, vActivateFreeTimeWaveInfo, Только Free Time
-        Gui, Add, Checkbox, vActivateFasterCreepsTiming, Быстрые крипы
-        Gui, Add, Checkbox, vActivateNotify1WaveInfo, 1 вышка
-        Gui, Add, Checkbox, vActivateNotify2WaveInfo, 2 вышка
-        Gui, Add, Checkbox, vActivateNotify3WaveInfo, 3 вышка
+        Gui, Add, Text, x22 y119 w110 h20 cOlive, Уведомления:
+        Gui, Add, Checkbox, x22 y139 w110 h20 vActivateListWavesInfo, Список волн
+        Gui, Add, Checkbox, x22 y159 w110 h20 vActivateCreepsWaveInfo, Только крипы
+        Gui, Add, Checkbox, x22 y179 w110 h20 vActivateBassWaveInfo, Только босс
+        Gui, Add, Checkbox, x22 y199 w110 h20 vActivateFreeTimeWaveInfo, Только Free Time
+        Gui, Add, Checkbox, x142 y139 w110 h20 vActivateFasterCreepsTiming, Быстрые крипы
+        Gui, Add, Checkbox, x142 y159 w110 h20 vActivateNotify1WaveInfo, 1 вышка
+        Gui, Add, Checkbox, x142 y179 w110 h20 vActivateNotify2WaveInfo, 2 вышка
+        Gui, Add, Checkbox, x142 y199 w110 h20 vActivateNotify3WaveInfo, 3 вышка
     ; Tab Section End
+
 
     ; GuiMain Continue
     Gui, Tab
-    Gui, Add, Button, gSave_Click, Сохранить
-    Gui, Add, Text, vGameTime, Время: 99:99
-    Gui, Add, Text, vGoldText, Золото: 99999
-    Gui, Menu, GuiMain_MenuBar
-    Gui, Show, x200 y200 h440 w220, RDA-Clicker
+    Gui, Add, Button, x22 y299 w100 h20 gSaveClick, Сохранить
+    Gui, Add, Text, x22 y329 w100 h20 vGameTime , Время: 99:99
+    Gui, Add, Text, x22 y349 w100 h20 vGoldText , Золото: 99999
+    Gui, Show, x127 y87 h370 w278, RDA-Clicker
     IniRead, OutputActivateHotkey, settings.ini, UserSettings, activateclicker
     Hotkey, %OutputActivateHotkey%, ToggleActivateClicker
+    Menu, Tray, Add,,
+    Menu, Tray, Add, Открыть кликер, TrayLogic
+    Menu, Tray, Icon, SystemScripts/clicker.ico
+}
+
+InitConnect:
+{
+    ; Server connect info
+    Server.Disconnect()
+    Server := new SocketTCP()
+    Server.OnAccept := Func("OnAccept")
+    IniRead, OutputPortBind, settings.ini, SystemSettings, port
+    Server.Bind(["127.0.0.1", OutputPortBind])
     Server.Listen()
-    InitGUI := True
+    return
+}
+
+TrayLogic:
+{
+    Gui, MainGui:Show
     return
 }
 
@@ -132,53 +152,53 @@ OnAccept(Server) {
     ; Setting GameTime and GoldText GUI
     If (TmpMinutes < 10 And TmpSeconds < 10)
     {
-        GuiControl,, GameTime, Время: 0%TmpMinutes%:0%TmpSeconds%
+        GuiControl, MainGui: , GameTime, Время: 0%TmpMinutes%:0%TmpSeconds%
     } Else
     {
         If (TmpMinutes < 10)
         {
-            GuiControl,, GameTime, Время: 0%TmpMinutes%:%TmpSeconds%
+            GuiControl, MainGui: , GameTime, Время: 0%TmpMinutes%:%TmpSeconds%
         } Else
         {
             If (TmpSeconds < 10)
             {
-                GuiControl,, GameTime, Время: %TmpMinutes%:0%TmpSeconds%
+                GuiControl, MainGui: , GameTime, Время: %TmpMinutes%:0%TmpSeconds%
             } Else
             {
-                GuiControl,, GameTime, Время: %TmpMinutes%:%TmpSeconds%
+                GuiControl, MainGui: , GameTime, Время: %TmpMinutes%:%TmpSeconds%
             }
         }
     }
     ; GuiControl,, GameTime, Время: %TmpMinutes%:%TmpSeconds%
-    GuiControl,, GoldText, Золото: %TmpGold%
+    GuiControl, MainGui:, GoldText, Золото: %TmpGold%
 
     ; Getting all variable for main functionality
-    GuiControlGet, ClickInActiveStatus,, ActivateInActiveWindowBuy
-    GuiControlGet, ClickInInactiveStatus,, ActivateInInactiveWindowBuy
-    GuiControlGet, ActivateGlobalStatus,, ActivateGlobal
-    GuiControlGet, ActivateHeroHelperStatus,, ActivateHeroHelper
+    GuiControlGet, ActivateInActiveWindowBuy, MainGui:
+    GuiControlGet, ActivateInInactiveWindowBuy, MainGui:
+    GuiControlGet, ActivateGlobal, MainGui:
+    GuiControlGet, ActivateHeroHelper, MainGui:
     IniRead, OutputGoldLimitNum, settings.ini, UserSettings, goldlimit
     TmpGoldEdit := ("0" . OutputGoldLimitNum) , TmpGoldEdit += 0
 
     ; Debugging Main Functionality
-    ; MsgBox, %ClickInActiveStatus% , %ActivateGlobalStatus% , %TmpGold%, %TmpGoldEdit%
+    ; MsgBox, %ActivateInActiveWindowBuy% , %ActivateGlobal% , %TmpGold%, %TmpGoldEdit%
 
     ; Main Tab Functionality
-    If (ClickInActiveStatus And ActivateGlobalStatus And TmpGold > TmpGoldEdit)
+    If (ActivateInActiveWindowBuy And ActivateGlobal And TmpGold > TmpGoldEdit)
     {
         IfWinActive, Dota 2
         {
             BuyInActiveWindow()
         }
     }
-    If (ClickInInactiveStatus And ActivateGlobalStatus And TmpGold > TmpGoldEdit)
+    If (ActivateInInactiveWindowBuy And ActivateGlobal And TmpGold > TmpGoldEdit)
     {
         IfWinExist, Dota 2
         {
             BuyInInactiveWindow()
         }
     }
-    If (ActivateHeroHelperStatus)
+    If (ActivateHeroHelper)
     {
         ; Hero Tab Functionality
         TmpHeroName := GameData.hero.name
@@ -224,16 +244,16 @@ OnAccept(Server) {
         }
     }
     ; Main mid statuses
-    GuiControlGet, ListOfWavesStatus,, ActivateListWavesInfo
-    GuiControlGet, CreepsWaveStatus,, ActivateCreepsWaveInfo
-    GuiControlGet, BossWaveStatus,, ActivateBassWaveInfo
-    GuiControlGet, FreeTimeWaveStatus,, ActivateFreeTimeWaveInfo
+    GuiControlGet, ActivateListWavesInfo, MainGui:
+    GuiControlGet, ActivateCreepsWaveInfo, MainGui:
+    GuiControlGet, ActivateBassWaveInfo, MainGui:
+    GuiControlGet, ActivateFreeTimeWaveInfo, MainGui:
     ; Check ultra status
-    GuiControlGet, FasterCreepsStatus,, ActivateFasterCreepsTiming
+    GuiControlGet, ActivateFasterCreepsTiming, MainGui:
     ; 
-    GuiControlGet, Notify1Status,, ActivateNotify1WaveInfo
-    GuiControlGet, Notify2Status,, ActivateNotify2WaveInfo
-    GuiControlGet, Notify3Status,, ActivateNotify3WaveInfo
+    GuiControlGet, ActivateNotify1WaveInfo, MainGui:
+    GuiControlGet, ActivateNotify2WaveInfo, MainGui:
+    GuiControlGet, ActivateNotify3WaveInfo, MainGui:
     TmpMod5Minutes := Mod(TmpMinutes, 5)
     TmpMod6Minutes := Mod(TmpMinutes, 6)
     If (TmpMinutes != PreviousMinute)
@@ -248,7 +268,7 @@ OnAccept(Server) {
         }
     }
     ; Mider Helper
-    If (ListOfWavesStatus)
+    If (ActivateListWavesInfo)
     {
         ; Show Waves
         If (!IsListOfWavesShowing)
@@ -266,9 +286,9 @@ OnAccept(Server) {
             Gui, list_of_waves_notify: Destroy
         }
     }
-    If (FasterCreepsStatus)
+    If (ActivateFasterCreepsTiming)
     {
-        If (Notify1Status And TmpSeconds >= 10 And TmpSeconds <= 12 &&
+        If (ActivateNotify1WaveInfo And TmpSeconds >= 10 And TmpSeconds <= 12 &&
         !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
         {
             ; Show Notify1
@@ -281,7 +301,7 @@ OnAccept(Server) {
         Else
         {
 
-            If (Notify2Status And TmpSeconds >= 23 And TmpSeconds <= 25 &&
+            If (ActivateNotify2WaveInfo And TmpSeconds >= 23 And TmpSeconds <= 25 &&
             !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
             {
                 ; Show Notify2
@@ -293,7 +313,7 @@ OnAccept(Server) {
             }
             Else
             {
-                If (Notify3Status And TmpSeconds >= 31 And TmpSeconds <= 33 &&
+                If (ActivateNotify3WaveInfo And TmpSeconds >= 31 And TmpSeconds <= 33 &&
                 !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
                 {
                     If (!IsNotifyShowing)
@@ -317,7 +337,7 @@ OnAccept(Server) {
     }
     Else
     {
-        If (Notify1Status And TmpSeconds >= 20 And TmpSeconds <= 22 &&
+        If (ActivateNotify1WaveInfo And TmpSeconds >= 20 And TmpSeconds <= 22 &&
         !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
         {
             ; Show Notify1
@@ -329,7 +349,7 @@ OnAccept(Server) {
         }
         Else
         {
-            If (Notify2Status And TmpSeconds >= 27 And TmpSeconds <= 29 &&
+            If (ActivateNotify2WaveInfo And TmpSeconds >= 27 And TmpSeconds <= 29 &&
             !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
             {
                 ; Show Notify2
@@ -341,7 +361,7 @@ OnAccept(Server) {
             }
             Else
             {
-                If (Notify3Status And TmpSeconds >= 39 And TmpSeconds <= 41 &&
+                If (ActivateNotify3WaveInfo And TmpSeconds >= 39 And TmpSeconds <= 41 &&
                 !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
                 {
                     ; Show Notify3
@@ -364,7 +384,7 @@ OnAccept(Server) {
             }
         }
     }
-    If (BossWaveStatus And TmpMod5Minutes == 0)
+    If (ActivateBassWaveInfo And TmpMod5Minutes == 0)
     {
         ; Show Boss Wave
         If (!IsBossWaveShowing)
@@ -383,7 +403,7 @@ OnAccept(Server) {
             Gui, boss_wave_notify: Destroy
         }
     }
-    If (CreepsWaveStatus And TmpMod5Minutes != 0 && TmpMod6Minutes != 0)
+    If (ActivateCreepsWaveInfo And TmpMod5Minutes != 0 && TmpMod6Minutes != 0)
     {
         ; Show Creeps Wave
         If (!IsCreepsWaveShowing)
@@ -402,7 +422,7 @@ OnAccept(Server) {
             Gui, creeps_wave_notify: Destroy
         }
     }
-    If (FreeTimeWaveStatus And TmpMod5Minutes != 0 && TmpMod6Minutes == 0)
+    If (ActivateFreeTimeWaveInfo And TmpMod5Minutes != 0 && TmpMod6Minutes == 0)
     {
         ; Show Free Time
         If (!IsFreeTimeWaveShowing)
@@ -425,7 +445,6 @@ OnAccept(Server) {
 	If (DC_SERV)
 		Sock.Disconnect()
     Sleep, %OutputDelay%
-    ; MsgBox, Aboba
     return
 }
 
@@ -504,20 +523,20 @@ ShowHelpHeroMessage(message)
 ; Toggle Activate Clicker
 ToggleActivateClicker:
 {
-    GuiControlGet, ActivateGlobalStatus,, ActivateGlobal
-    If (ActivateGlobalStatus)
+    GuiControlGet, ActivateGlobal, MainGui:
+    If (ActivateGlobal)
     {
-        GuiControl,, ActivateGlobal, 0
+        GuiControl, MainGui:, ActivateGlobal, 0
     } else {
-        GuiControl,, ActivateGlobal, 1
+        GuiControl, MainGui:, ActivateGlobal, 1
     }
     return
 }
 ; Toggle Transparent Game Window
 ToggleTransparentWindow:
 {
-    GuiControlGet, TransparentStatus,, ActivateHiddenGame
-    If (TransparentStatus)
+    GuiControlGet, ActivateHiddenGame, MainGui:
+    If (ActivateHiddenGame)
     {
         IfWinExist, Dota 2
         {
@@ -575,8 +594,8 @@ About_Menu:
 ; If help checkbox is active
 ShowHelp(wParam, lParam, Msg)
 {
-    GuiControlGet, PromptCheckedStatus,, ActivateClickerPrompt
-    If (PromptCheckedStatus)
+    GuiControlGet, ActivateClickerPrompt, MainGui:
+    If (ActivateClickerPrompt)
     {
         If (!IsToolTipShowing)
         {
@@ -596,26 +615,34 @@ ShowHelp(wParam, lParam, Msg)
         else IfEqual, OutputVarControl, Button6
             Help := "Выводить уведомление, что`nскилл откатился (Treant и Tinker)"
         else IfEqual, OutputVarControl, Button7
-            Help := "Записать в данный скрипт`nновый функционал"
+            Help := "Вывести билд для героя"
         else IfEqual, OutputVarControl, Button8
-            Help := "Запустить выбранный скрипт"
+            Help := "Записать в данный скрипт`nновый функционал"
         else IfEqual, OutputVarControl, Button9
-            Help := "Выводит информацию о последующих`nволнах (6 волн)"
+            Help := "Записать в данный скрипт`nновый функционал(упрощенный)"
         else IfEqual, OutputVarControl, Button10
-            Help := "Выводит на экран, что идут крипы"
+            Help := "Добавить новый скрипт"
         else IfEqual, OutputVarControl, Button11
-            Help := "Выводит на экран, что идёт босс"
+            Help := "Удалить выбранный скрипт"
         else IfEqual, OutputVarControl, Button12
-            Help := "Выводит на экран, что сейчас free time"
+            Help := "Запустить выбранный скрипт"
         else IfEqual, OutputVarControl, Button13
-            Help := "Включать на сложности`nУльтра"
+            Help := "Выводит информацию о последующих`nволнах (6 волн)"
         else IfEqual, OutputVarControl, Button14
-            Help := "Сообщает, что крипы уже у первой`nбашни"
+            Help := "Выводит на экран, что идут крипы"
         else IfEqual, OutputVarControl, Button15
-            Help := "Сообщает, что крипы уже у второй`nбашни"
+            Help := "Выводит на экран, что идёт босс"
         else IfEqual, OutputVarControl, Button16
-            Help := "Сообщает, что крипы уже у третьей`nбашни"
+            Help := "Выводит на экран, что сейчас free time"
         else IfEqual, OutputVarControl, Button17
+            Help := "Включать на сложности`nУльтра"
+        else IfEqual, OutputVarControl, Button18
+            Help := "Сообщает, что крипы уже у первой`nбашни"
+        else IfEqual, OutputVarControl, Button19
+            Help := "Сообщает, что крипы уже у второй`nбашни"
+        else IfEqual, OutputVarControl, Button20
+            Help := "Сообщает, что крипы уже у третьей`nбашни"
+        else IfEqual, OutputVarControl, Button21
             Help := "Сохраняет ваши изменения в ini файл"
         else IfEqual, OutputVarControl, Edit1
             Help := "Количество золота для срабатывания`nзакупки кликером"
@@ -701,24 +728,94 @@ GenerateListOfWavesString(IntMinutes)
 }
 
 ; Save click event
-Save_Click:
+SaveClick:
 {
     ; Save Activate Key
     IniRead, OutputActivateHotkeyReaded, settings.ini, UserSettings, activateclicker
     Hotkey, %OutputActivateHotkeyReaded%, Off
-    GuiControlGet, OutputActivateHotkey,, HotkeyActivateGlobal
-    IniWrite, %OutputActivateHotkey%, settings.ini, UserSettings, activateclicker
-    Hotkey, %OutputActivateHotkey%, ToggleActivateClicker
-    TmpString := HotkeyToText(OutputActivateHotkey)
+    GuiControlGet, HotkeyActivateGlobal, MainGui:
+    IniWrite, %HotkeyActivateGlobal%, settings.ini, UserSettings, activateclicker
+    Hotkey, %HotkeyActivateGlobal%, ToggleActivateClicker
+    TmpString := HotkeyToText(HotkeyActivateGlobal)
     IniWrite, %TmpString%, settings.ini, UserSettings, activateclickertext
     
     ; Save Buy key
-    GuiControlGet, OutputBuyHotkey,, HotkeyBuy
-    IniWrite, %OutputBuyHotkey%, settings.ini, UserSettings, hotkeybuy
-    TmpString := HotkeyToText(OutputBuyHotkey)
+    GuiControlGet, HotkeyBuy, MainGui:
+    IniWrite, %HotkeyBuy%, settings.ini, UserSettings, hotkeybuy
+    TmpString := HotkeyToText(HotkeyBuy)
     IniWrite, %TmpString%, settings.ini, UserSettings, hotkeybuytext
     ; Save gold limit
-    GuiControlGet, OutputBuyHotkey,, GoldLimitEdit
-    IniWrite, %OutputBuyHotkey%, settings.ini, UserSettings, goldlimit
+    GuiControlGet, GoldLimitEdit, MainGui:
+    IniWrite, %GoldLimitEdit%, settings.ini, UserSettings, goldlimit
+    return
+}
+
+RecordScript:
+{
+    ; Open Record GUI
+    GuiControlGet, ScriptsListBox, MainGui:
+    Loop, Parse, ScriptsListBox, |
+    {
+        IniWrite, %A_LoopField%, settings.ini, Scripts, scriptname
+    }
+    Run, %A_WorkingDir%\SystemScripts\macro_recorder.ahk
+    return
+}
+
+EasyRecordScript:
+{
+    ; Open Easy Record GUI
+    GuiControlGet, ScriptsListBox, MainGui:
+    Loop, Parse, ScriptsListBox, |
+    {
+        IniWrite, %A_LoopField%, settings.ini, Scripts, scriptname
+    }
+    Run, %A_WorkingDir%\SystemScripts\easy_macro_recorder.ahk
+    return
+}
+
+AddScript:
+{
+    InputBox, OutputFileName, Создание скрипта, Введите название скрипта:
+    If (!ErrorLevel)
+    {
+        FileAppend,, %A_WorkingDir%\Scripts\%OutputFileName%.ahk
+    }
+    Tmp_List := ""
+    Loop, Files, Scripts\*.*, R
+    {
+        Tmp_List .= A_LoopFileShortName
+        Tmp_List .= "|"
+    }
+    GuiControl,, ScriptsListBox, |
+    GuiControl,, ScriptsListBox, %Tmp_List%
+    return
+}
+
+DeleteScript:
+{
+    GuiControlGet, ScriptsListBox, MainGui:
+    Loop, Parse, ScriptsListBox, |
+    {
+        FileDelete, %A_WorkingDir%\Scripts\%ScriptsListBox%
+    }
+    Tmp_List := ""
+    Loop, Files, Scripts\*.*, R
+    {
+        Tmp_List .= A_LoopFileShortName
+        Tmp_List .= "|"
+    }
+    GuiControl,, ScriptsListBox, |
+    GuiControl,, ScriptsListBox, %Tmp_List%
+    return
+}
+
+RunScript:
+{
+    GuiControlGet, ScriptsListBox, MainGui:
+    Loop, Parse, ScriptsListBox, |
+    {
+        Run, %A_WorkingDir%\Scripts\%ScriptsListBox%
+    }
     return
 }
