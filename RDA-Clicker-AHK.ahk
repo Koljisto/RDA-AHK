@@ -25,11 +25,11 @@
     global IsBossWaveShowing := False
     global IsFreeTimeWaveShowing := False
     global IsListOfWavesShowing := False
+    global IsCanAutobuy := False
     global PreviousMinute := 0
     FileEncoding, CP65001
     IniRead, OutputDelay, settings.ini, UserSettings, scriptdelay
 }
-
 
 InitGUI:
 {
@@ -40,8 +40,9 @@ InitGUI:
     Gui, MainGui: New
     Gui, Menu, GuiMain_MenuBar
     ; GuiMain Start
-    Gui, Add, Checkbox, x12 y9 w250 h20 vActivateClickerPrompt, Включить подсказки
-    Gui, Add, Checkbox, x12 y29 w250 h20 vActivateGlobal, Включить
+    Gui, Add, Checkbox, x12 y9 w140 h20 vActivateClickerPrompt, Включить подсказки
+    Gui, Add, Checkbox, x12 y29 w140 h20 vActivateGlobal, Включить
+    Gui, Add, Button, x152 y9 w60 h20 gCreateConfig, Конфиг
     Gui, Add, Text, x12 y49 w250 h20, Клавиша включения:
     IniRead, OutputKeyBind, settings.ini, UserSettings, activateclicker
     Gui, Add, Hotkey, x12 y69 w250 h20 vHotkeyActivateGlobal, %OutputKeyBind%
@@ -109,6 +110,35 @@ InitGUI:
     Menu, Tray, Add,,
     Menu, Tray, Add, Открыть кликер, TrayLogic
     Menu, Tray, Icon, SystemScripts/clicker.ico
+    IniRead, OutputIsFirstTime, settings.ini, SystemSettings, isfirsttime
+    IniRead, OutputGameFolder, settings.ini, SystemSettings, gamefolder
+    If (%OutputIsFirstTime% Or OutputGameFolder=="")
+    {
+        Goto, CreateConfig
+    }
+    Else
+    {
+        IfNotExist, %OutputGameFolder%/game/dota/cfg/gamestate_integration/gamestate_integration_test.cfg
+        {
+            IfExist, SystemScripts/gamestate_integration_test.cfg
+            {
+                IfExist, %OutputGameFolder%/game/dota/cfg/gamestate_integration/
+                {
+                    FileCopy, SystemScripts/gamestate_integration_test.cfg, %OutputGameFolder%/game/dota/cfg/gamestate_integration/gamestate_integration_test.cfg, 1
+                }
+                Else
+                {
+                    FileCreateDir, %OutputGameFolder%/game/dota/cfg/gamestate_integration/
+                    FileCopy, SystemScripts/gamestate_integration_test.cfg, %OutputGameFolder%/game/dota/cfg/gamestate_integration/gamestate_integration_test.cfg, 1
+                }
+            }
+            Else
+            {
+                MsgBox, Не был найден дефолтный конфиг.
+            }
+            MsgBox, Конфиг не был найден в игре. Был загружен обычный из SystemScripts
+        }
+    }
 }
 
 InitConnect:
@@ -130,107 +160,91 @@ TrayLogic:
 }
 
 OnAccept(Server) {
-	Sock := Server.Accept()
-    ; Temporary text request
-    TmpText := Sock.RecvText()
-    Sock.SendText("HTTP/2.1 200 OK`nContent-Type: text/html")
-    ; 252 - start JSON quotes
-    StrCopy := SubStr(TmpText, 252)
-    ; Generate JSON GameData
-    GameData := JSON.Load(StrCopy)
-    TmpGold = % GameData.player.gold
-    TmpMinutes = % GameData.map.clock_time
-    TmpSeconds = % GameData.map.clock_time
-    TmpGold := ("0" . TmpGold) , TmpGold += 0
-    TmpMinutes := ("0" . TmpMinutes) , TmpMinutes += 0, TmpMinutes := TmpMinutes//60
-    TmpSeconds := ("0" . TmpSeconds) , TmpSeconds += 0, TmpSeconds := Mod(TmpSeconds, 60)
-    ; Dropping incorrect data
-    If (TmpSeconds == 0)
+    try
     {
-        return
-    }
-    ; Setting GameTime and GoldText GUI
-    If (TmpMinutes < 10 And TmpSeconds < 10)
-    {
-        GuiControl, MainGui: , GameTime, Время: 0%TmpMinutes%:0%TmpSeconds%
-    } Else
-    {
-        If (TmpMinutes < 10)
+        Sock := Server.Accept()
+        ; Temporary text request
+        TmpText := Sock.RecvText()
+        Sock.SendText("HTTP/2.1 200 OK`nContent-Type: text/html")
+        ; 252 - start JSON quotes
+        StrCopy := SubStr(TmpText, 252)
+        ; Generate JSON GameData
+        GameData := JSON.Load(StrCopy)
+        TmpGold = % GameData.player.gold
+        TmpMinutes = % GameData.map.clock_time
+        TmpSeconds = % GameData.map.clock_time
+        TmpGold := ("0" . TmpGold) , TmpGold += 0
+        TmpMinutes := ("0" . TmpMinutes) , TmpMinutes += 0, TmpMinutes := TmpMinutes//60
+        TmpSeconds := ("0" . TmpSeconds) , TmpSeconds += 0, TmpSeconds := Mod(TmpSeconds, 60)
+        ; Dropping incorrect data
+        If (TmpSeconds == 0)
         {
-            GuiControl, MainGui: , GameTime, Время: 0%TmpMinutes%:%TmpSeconds%
+            return
+        }
+        ; Setting GameTime and GoldText GUI
+        If (TmpMinutes < 10 And TmpSeconds < 10)
+        {
+            GuiControl, MainGui: , GameTime, Время: 0%TmpMinutes%:0%TmpSeconds%
         } Else
         {
-            If (TmpSeconds < 10)
+            If (TmpMinutes < 10)
             {
-                GuiControl, MainGui: , GameTime, Время: %TmpMinutes%:0%TmpSeconds%
+                GuiControl, MainGui: , GameTime, Время: 0%TmpMinutes%:%TmpSeconds%
             } Else
             {
-                GuiControl, MainGui: , GameTime, Время: %TmpMinutes%:%TmpSeconds%
-            }
-        }
-    }
-    ; GuiControl,, GameTime, Время: %TmpMinutes%:%TmpSeconds%
-    GuiControl, MainGui:, GoldText, Золото: %TmpGold%
-
-    ; Getting all variable for main functionality
-    GuiControlGet, ActivateInActiveWindowBuy, MainGui:
-    GuiControlGet, ActivateInInactiveWindowBuy, MainGui:
-    GuiControlGet, ActivateGlobal, MainGui:
-    GuiControlGet, ActivateHeroHelper, MainGui:
-    IniRead, OutputGoldLimitNum, settings.ini, UserSettings, goldlimit
-    TmpGoldEdit := ("0" . OutputGoldLimitNum) , TmpGoldEdit += 0
-
-    ; Debugging Main Functionality
-    ; MsgBox, %ActivateInActiveWindowBuy% , %ActivateGlobal% , %TmpGold%, %TmpGoldEdit%
-
-    ; Main Tab Functionality
-    If (ActivateInActiveWindowBuy And ActivateGlobal And TmpGold > TmpGoldEdit)
-    {
-        IfWinActive, Dota 2
-        {
-            BuyInActiveWindow()
-        }
-    }
-    If (ActivateInInactiveWindowBuy And ActivateGlobal And TmpGold > TmpGoldEdit)
-    {
-        IfWinExist, Dota 2
-        {
-            BuyInInactiveWindow()
-        }
-    }
-    If (ActivateHeroHelper)
-    {
-        ; Hero Tab Functionality
-        TmpHeroName := GameData.hero.name
-        IfEqual, TmpHeroName, npc_dota_hero_treant
-        {
-            TmpCooldown = % GameData.abilities.ability1.cooldown
-            TmpCooldown := ("0" . TmpCooldown) , TmpCooldown += 0
-            If (TmpCooldown == 0)
-            {
-                ShowHelpHeroMessage("Прожми дерево!")
-                IsHeroHelperShowing := True
-            } Else 
-            {
-                If (IsHeroHelperShowing)
+                If (TmpSeconds < 10)
                 {
-                    Gui, ability_helper: Cancel
-                    Gui, ability_helper: Hide
-                    Gui, ability_helper: Destroy
-                    IsHeroHelperShowing := False
+                    GuiControl, MainGui: , GameTime, Время: %TmpMinutes%:0%TmpSeconds%
+                } Else
+                {
+                    GuiControl, MainGui: , GameTime, Время: %TmpMinutes%:%TmpSeconds%
                 }
             }
-        } Else
+        }
+        ; GuiControl,, GameTime, Время: %TmpMinutes%:%TmpSeconds%
+        GuiControl, MainGui:, GoldText, Золото: %TmpGold%
+
+        ; Getting all variable for main functionality
+        GuiControlGet, ActivateInActiveWindowBuy, MainGui:
+        GuiControlGet, ActivateInInactiveWindowBuy, MainGui:
+        GuiControlGet, ActivateGlobal, MainGui:
+        GuiControlGet, ActivateHeroHelper, MainGui:
+        IniRead, OutputGoldLimitNum, settings.ini, UserSettings, goldlimit
+        TmpGoldEdit := ("0" . OutputGoldLimitNum) , TmpGoldEdit += 0
+
+        ; Debugging Main Functionality
+        ; MsgBox, %ActivateInActiveWindowBuy% , %ActivateGlobal% , %TmpGold%, %TmpGoldEdit%
+
+        ; Main Tab Functionality
+        If (ActivateInActiveWindowBuy And ActivateGlobal And TmpGold > TmpGoldEdit And !IsCanAutobuy)
         {
-            IfEqual, TmpHeroName, npc_dota_hero_tinker
+            IfWinActive, Dota 2
             {
-                TmpCooldown = % GameData.abilities.ability4.cooldown
+                IsCanAutobuy := True
+                BuyInActiveWindow()
+            }
+        }
+        If (ActivateInInactiveWindowBuy And ActivateGlobal And TmpGold > TmpGoldEdit And !IsCanAutobuy)
+        {
+            IfWinExist, Dota 2
+            {
+                IsCanAutobuy := True
+                BuyInInactiveWindow()
+            }
+        }
+        If (ActivateHeroHelper)
+        {
+            ; Hero Tab Functionality
+            TmpHeroName := GameData.hero.name
+            IfEqual, TmpHeroName, npc_dota_hero_treant
+            {
+                TmpCooldown = % GameData.abilities.ability1.cooldown
                 TmpCooldown := ("0" . TmpCooldown) , TmpCooldown += 0
                 If (TmpCooldown == 0)
                 {
-                    ShowHelpHeroMessage("Улучши башню!")
+                    ShowHelpHeroMessage("Прожми дерево!")
                     IsHeroHelperShowing := True
-                } Else
+                } Else 
                 {
                     If (IsHeroHelperShowing)
                     {
@@ -242,227 +256,258 @@ OnAccept(Server) {
                 }
             } Else
             {
-                If (IsHeroHelperShowing)
+                IfEqual, TmpHeroName, npc_dota_hero_tinker
                 {
-                    Gui, ability_helper: Cancel
-                    Gui, ability_helper: Hide
-                    Gui, ability_helper: Destroy
-                    IsHeroHelperShowing := False
+                    TmpCooldown = % GameData.abilities.ability4.cooldown
+                    TmpCooldown := ("0" . TmpCooldown) , TmpCooldown += 0
+                    If (TmpCooldown == 0)
+                    {
+                        ShowHelpHeroMessage("Улучши башню!")
+                        IsHeroHelperShowing := True
+                    } Else
+                    {
+                        If (IsHeroHelperShowing)
+                        {
+                            Gui, ability_helper: Cancel
+                            Gui, ability_helper: Hide
+                            Gui, ability_helper: Destroy
+                            IsHeroHelperShowing := False
+                        }
+                    }
+                } Else
+                {
+                    If (IsHeroHelperShowing)
+                    {
+                        Gui, ability_helper: Cancel
+                        Gui, ability_helper: Hide
+                        Gui, ability_helper: Destroy
+                        IsHeroHelperShowing := False
+                    }
                 }
             }
-        }
-    } Else
-    {
-        If (IsHeroHelperShowing)
+        } Else
         {
-            Gui, ability_helper: Cancel
-            Gui, ability_helper: Hide
-            Gui, ability_helper: Destroy
-            IsHeroHelperShowing := False
+            If (IsHeroHelperShowing)
+            {
+                Gui, ability_helper: Cancel
+                Gui, ability_helper: Hide
+                Gui, ability_helper: Destroy
+                IsHeroHelperShowing := False
+            }
         }
-    }
-    ; Main mid statuses
-    GuiControlGet, ActivateListWavesInfo, MainGui:
-    GuiControlGet, ActivateCreepsWaveInfo, MainGui:
-    GuiControlGet, ActivateBassWaveInfo, MainGui:
-    GuiControlGet, ActivateFreeTimeWaveInfo, MainGui:
-    ; Check ultra status
-    GuiControlGet, ActivateFasterCreepsTiming, MainGui:
-    ; 
-    GuiControlGet, ActivateNotify1WaveInfo, MainGui:
-    GuiControlGet, ActivateNotify2WaveInfo, MainGui:
-    GuiControlGet, ActivateNotify3WaveInfo, MainGui:
-    TmpMod5Minutes := Mod(TmpMinutes, 5)
-    TmpMod6Minutes := Mod(TmpMinutes, 6)
-    If (TmpMinutes != PreviousMinute)
-    {
-        Gui, list_of_waves_notify: Cancel
-        Gui, list_of_waves_notify: Hide
-        Gui, list_of_waves_notify: Destroy
-        PreviousMinute = %TmpMinutes%
-        If (IsListOfWavesShowing)
+        ; Main mid statuses
+        GuiControlGet, ActivateListWavesInfo, MainGui:
+        GuiControlGet, ActivateCreepsWaveInfo, MainGui:
+        GuiControlGet, ActivateBassWaveInfo, MainGui:
+        GuiControlGet, ActivateFreeTimeWaveInfo, MainGui:
+        ; Check ultra status
+        GuiControlGet, ActivateFasterCreepsTiming, MainGui:
+        ; 
+        GuiControlGet, ActivateNotify1WaveInfo, MainGui:
+        GuiControlGet, ActivateNotify2WaveInfo, MainGui:
+        GuiControlGet, ActivateNotify3WaveInfo, MainGui:
+        TmpMod5Minutes := Mod(TmpMinutes, 5)
+        TmpMod6Minutes := Mod(TmpMinutes, 6)
+        If (TmpMinutes != PreviousMinute)
         {
-            ShowListOfWavesNotify(GenerateListOfWavesString(TmpMinutes))
-        }
-    }
-    ; Mider Helper
-    If (ActivateListWavesInfo)
-    {
-        ; Show Waves
-        If (!IsListOfWavesShowing)
-        {
-            IsListOfWavesShowing := True
-            ShowListOfWavesNotify(GenerateListOfWavesString(TmpMinutes))
-        }
-    } Else
-    {
-        If (IsListOfWavesShowing)
-        {
-            IsListOfWavesShowing := False
             Gui, list_of_waves_notify: Cancel
             Gui, list_of_waves_notify: Hide
             Gui, list_of_waves_notify: Destroy
-        }
-    }
-    If (ActivateFasterCreepsTiming)
-    {
-        If (ActivateNotify1WaveInfo And TmpSeconds >= 10 And TmpSeconds <= 12 &&
-        !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
-        {
-            ; Show Notify1
-            If (!IsNotifyShowing)
+            PreviousMinute = %TmpMinutes%
+            If (IsListOfWavesShowing)
             {
-                IsNotifyShowing := True
-                ShowNotify("Башня 1", 50)
+                ShowListOfWavesNotify(GenerateListOfWavesString(TmpMinutes))
             }
         }
-        Else
+        ; Mider Helper
+        If (ActivateListWavesInfo)
         {
+            ; Show Waves
+            If (!IsListOfWavesShowing)
+            {
+                IsListOfWavesShowing := True
+                ShowListOfWavesNotify(GenerateListOfWavesString(TmpMinutes))
+            }
+        } Else
+        {
+            If (IsListOfWavesShowing)
+            {
+                IsListOfWavesShowing := False
+                Gui, list_of_waves_notify: Cancel
+                Gui, list_of_waves_notify: Hide
+                Gui, list_of_waves_notify: Destroy
+            }
+        }
+        If (ActivateFasterCreepsTiming)
+        {
+            If (ActivateNotify1WaveInfo And TmpSeconds >= 10 And TmpSeconds <= 12 &&
+            !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
+            {
+                ; Show Notify1
+                If (!IsNotifyShowing)
+                {
+                    IsNotifyShowing := True
+                    ShowNotify("Башня 1", 50)
+                }
+            }
+            Else
+            {
 
-            If (ActivateNotify2WaveInfo And TmpSeconds >= 23 And TmpSeconds <= 25 &&
-            !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
-            {
-                ; Show Notify2
-                If (!IsNotifyShowing)
-                {
-                    IsNotifyShowing := True
-                    ShowNotify("Башня 2", 90)
-                }
-            }
-            Else
-            {
-                If (ActivateNotify3WaveInfo And TmpSeconds >= 31 And TmpSeconds <= 33 &&
+                If (ActivateNotify2WaveInfo And TmpSeconds >= 23 And TmpSeconds <= 25 &&
                 !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
                 {
+                    ; Show Notify2
                     If (!IsNotifyShowing)
                     {
                         IsNotifyShowing := True
-                        ShowNotify("Башня 3", 120)
+                        ShowNotify("Башня 2", 90)
                     }
                 }
                 Else
                 {
-                    If(IsNotifyShowing)
+                    If (ActivateNotify3WaveInfo And TmpSeconds >= 31 And TmpSeconds <= 33 &&
+                    !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
                     {
-                        IsNotifyShowing := False
-                        Gui, notify: Cancel
-                        Gui, notify: Hide
-                        Gui, notify: Destroy
+                        If (!IsNotifyShowing)
+                        {
+                            IsNotifyShowing := True
+                            ShowNotify("Башня 3", 120)
+                        }
+                    }
+                    Else
+                    {
+                        If(IsNotifyShowing)
+                        {
+                            IsNotifyShowing := False
+                            Gui, notify: Cancel
+                            Gui, notify: Hide
+                            Gui, notify: Destroy
+                        }
                     }
                 }
-            }
-        }
-    }
-    Else
-    {
-        If (ActivateNotify1WaveInfo And TmpSeconds >= 20 And TmpSeconds <= 22 &&
-        !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
-        {
-            ; Show Notify1
-            If (!IsNotifyShowing)
-            {
-                IsNotifyShowing := True
-                ShowNotify("Башня 1", 50)
             }
         }
         Else
         {
-            If (ActivateNotify2WaveInfo And TmpSeconds >= 27 And TmpSeconds <= 29 &&
+            If (ActivateNotify1WaveInfo And TmpSeconds >= 20 And TmpSeconds <= 22 &&
             !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
             {
-                ; Show Notify2
+                ; Show Notify1
                 If (!IsNotifyShowing)
                 {
                     IsNotifyShowing := True
-                    ShowNotify("Башня 2", 90)
+                    ShowNotify("Башня 1", 50)
                 }
             }
             Else
             {
-                If (ActivateNotify3WaveInfo And TmpSeconds >= 39 And TmpSeconds <= 41 &&
+                If (ActivateNotify2WaveInfo And TmpSeconds >= 27 And TmpSeconds <= 29 &&
                 !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
                 {
-                    ; Show Notify3
+                    ; Show Notify2
                     If (!IsNotifyShowing)
                     {
                         IsNotifyShowing := True
-                        ShowNotify("Башня 3", 120)
+                        ShowNotify("Башня 2", 90)
                     }
                 }
                 Else
                 {
-                    If (IsNotifyShowing)
+                    If (ActivateNotify3WaveInfo And TmpSeconds >= 39 And TmpSeconds <= 41 &&
+                    !(TmpMod5Minutes != 0 && TmpMod6Minutes == 0))
                     {
-                        IsNotifyShowing := False
-                        Gui, notify: Cancel
-                        Gui, notify: Hide
-                        Gui, notify: Destroy
+                        ; Show Notify3
+                        If (!IsNotifyShowing)
+                        {
+                            IsNotifyShowing := True
+                            ShowNotify("Башня 3", 120)
+                        }
+                    }
+                    Else
+                    {
+                        If (IsNotifyShowing)
+                        {
+                            IsNotifyShowing := False
+                            Gui, notify: Cancel
+                            Gui, notify: Hide
+                            Gui, notify: Destroy
+                        }
                     }
                 }
             }
         }
-    }
-    If (ActivateBassWaveInfo And TmpMod5Minutes == 0)
-    {
-        ; Show Boss Wave
-        If (!IsBossWaveShowing)
+        If (ActivateBassWaveInfo And TmpMod5Minutes == 0)
         {
-            IsBossWaveShowing := True
-            ShowBossWaveNotify()
+            ; Show Boss Wave
+            If (!IsBossWaveShowing)
+            {
+                IsBossWaveShowing := True
+                ShowBossWaveNotify()
+            }
         }
-    }
-    Else
-    {
-        If (IsBossWaveShowing)
+        Else
         {
-            IsBossWaveShowing := False
-            Gui, boss_wave_notify: Cancel
-            Gui, boss_wave_notify: Hide
-            Gui, boss_wave_notify: Destroy
+            If (IsBossWaveShowing)
+            {
+                IsBossWaveShowing := False
+                Gui, boss_wave_notify: Cancel
+                Gui, boss_wave_notify: Hide
+                Gui, boss_wave_notify: Destroy
+            }
         }
-    }
-    If (ActivateCreepsWaveInfo And TmpMod5Minutes != 0 && TmpMod6Minutes != 0)
-    {
-        ; Show Creeps Wave
-        If (!IsCreepsWaveShowing)
+        If (ActivateCreepsWaveInfo And TmpMod5Minutes != 0 && TmpMod6Minutes != 0)
         {
-            IsCreepsWaveShowing := True
-            ShowCreepsWaveNotify()
+            ; Show Creeps Wave
+            If (!IsCreepsWaveShowing)
+            {
+                IsCreepsWaveShowing := True
+                ShowCreepsWaveNotify()
+            }
         }
-    }
-    Else
-    {
-        If (IsCreepsWaveShowing)
+        Else
         {
-            IsCreepsWaveShowing := False
-            Gui, creeps_wave_notify: Cancel
-            Gui, creeps_wave_notify: Hide
-            Gui, creeps_wave_notify: Destroy
+            If (IsCreepsWaveShowing)
+            {
+                IsCreepsWaveShowing := False
+                Gui, creeps_wave_notify: Cancel
+                Gui, creeps_wave_notify: Hide
+                Gui, creeps_wave_notify: Destroy
+            }
         }
-    }
-    If (ActivateFreeTimeWaveInfo And TmpMod5Minutes != 0 && TmpMod6Minutes == 0)
-    {
-        ; Show Free Time
-        If (!IsFreeTimeWaveShowing)
+        If (ActivateFreeTimeWaveInfo And TmpMod5Minutes != 0 && TmpMod6Minutes == 0)
         {
-            IsFreeTimeWaveShowing := True
-            ShowFreetimeWaveNotify()
+            ; Show Free Time
+            If (!IsFreeTimeWaveShowing)
+            {
+                IsFreeTimeWaveShowing := True
+                ShowFreetimeWaveNotify()
+            }
         }
-    }
-    Else
-    {
-        If (IsFreeTimeWaveShowing)
+        Else
         {
-            IsFreeTimeWaveShowing := False
-            Gui, freetime_wave_notify: Cancel
-            Gui, freetime_wave_notify: Hide
-            Gui, freetime_wave_notify: Destroy
+            If (IsFreeTimeWaveShowing)
+            {
+                IsFreeTimeWaveShowing := False
+                Gui, freetime_wave_notify: Cancel
+                Gui, freetime_wave_notify: Hide
+                Gui, freetime_wave_notify: Destroy
+            }
         }
+        ; Disconnect Socket If DC_SERV is True
+        If (DC_SERV)
+            Sock.Disconnect()
+        Sleep, %OutputDelay%
     }
-    ; Disconnect Socket If DC_SERV is True
-	If (DC_SERV)
-		Sock.Disconnect()
-    Sleep, %OutputDelay%
+    catch e
+    {
+        ; Server connect info
+        Server.Disconnect()
+        Server := new SocketTCP()
+        Server.OnAccept := Func("OnAccept")
+        IniRead, OutputPortBind, settings.ini, SystemSettings, port
+        Server.Bind(["127.0.0.1", OutputPortBind])
+        Server.Listen()
+    }
     return
 }
 
@@ -575,11 +620,16 @@ BuyInActiveWindow()
 {
     IfWinActive, Dota 2
     {
-        SetKeyDelay 400
-        IniRead, OutputInt, settings.ini, UserSettings, hotkeybuy
-        Send, {Alt up}
-        Send, {%OutputInt% down}
-        Send, {%OutputInt% up}
+        If (IsCanAutobuy)
+        {
+            ; SetKeyDelay 400
+            IniRead, OutputInt, settings.ini, UserSettings, hotkeybuy
+            Send, {Alt up}
+            Send, {%OutputInt% down}
+            Send, {%OutputInt% up}
+            Sleep, 500
+            IsCanAutobuy := False
+        }
     }
     return
 }
@@ -587,15 +637,20 @@ BuyInActiveWindow()
 ; Buy in Inactive Window
 BuyInInactiveWindow()
 {
-    SetKeyDelay 400
     IfWinExist, Dota 2
     {
-        IniRead, OutputInt, settings.ini, UserSettings, hotkeybuy
-        WinActivate ; Use the window found by IfWinExist.
-        Send, {Alt up}
-        Send, {%OutputInt% down}
-        Send, {%OutputInt% up}
-        WinMinimize
+        If (IsCanAutobuy)
+        {
+            ; SetKeyDelay 400
+            IniRead, OutputInt, settings.ini, UserSettings, hotkeybuy
+            WinActivate ; Use the window found by IfWinExist.
+            Send, {Alt up}
+            Send, {%OutputInt% down}
+            Send, {%OutputInt% up}
+            WinMinimize
+            Sleep, 500
+            IsCanAutobuy := False
+        }
     }
     return
 }
@@ -625,42 +680,44 @@ ShowHelp(wParam, lParam, Msg)
         else IfEqual, OutputVarControl, Button2
             Help := "Включает функционал всего кликера"
         else IfEqual, OutputVarControl, Button3
-            Help := "Будет происходить закупка`nтолько если окно активно"
+            Help := "Переместить конфиг из папки`nSystemScripts в папку с игрой."
         else IfEqual, OutputVarControl, Button4
-            Help := "Будет происходить закупка`nтолько если окно не активно"
+            Help := "Будет происходить закупка`nтолько если окно активно"
         else IfEqual, OutputVarControl, Button5
-            Help := "Скрывает окно игры. Переключи`nперед закрытием кликера"
+            Help := "Будет происходить закупка`nтолько если окно не активно"
         else IfEqual, OutputVarControl, Button6
-            Help := "Выводить уведомление, что`nскилл откатился (Treant и Tinker)"
+            Help := "Скрывает окно игры. Переключи`nперед закрытием кликера"
         else IfEqual, OutputVarControl, Button7
-            Help := "Вывести билд для героя"
+            Help := "Выводить уведомление, что`nскилл откатился (Treant и Tinker)"
         else IfEqual, OutputVarControl, Button8
-            Help := "Записать в данный скрипт`nновый функционал"
+            Help := "Вывести билд для героя"
         else IfEqual, OutputVarControl, Button9
-            Help := "Записать в данный скрипт`nновый функционал(упрощенный)"
+            Help := "Записать в данный скрипт`nновый функционал"
         else IfEqual, OutputVarControl, Button10
-            Help := "Добавить новый скрипт"
+            Help := "Записать в данный скрипт`nновый функционал(упрощенный)"
         else IfEqual, OutputVarControl, Button11
-            Help := "Удалить выбранный скрипт"
+            Help := "Добавить новый скрипт"
         else IfEqual, OutputVarControl, Button12
-            Help := "Запустить выбранный скрипт"
+            Help := "Удалить выбранный скрипт"
         else IfEqual, OutputVarControl, Button13
-            Help := "Выводит информацию о последующих`nволнах (6 волн)"
+            Help := "Запустить выбранный скрипт"
         else IfEqual, OutputVarControl, Button14
-            Help := "Выводит на экран, что идут крипы"
+            Help := "Выводит информацию о последующих`nволнах (6 волн)"
         else IfEqual, OutputVarControl, Button15
-            Help := "Выводит на экран, что идёт босс"
+            Help := "Выводит на экран, что идут крипы"
         else IfEqual, OutputVarControl, Button16
-            Help := "Выводит на экран, что сейчас free time"
+            Help := "Выводит на экран, что идёт босс"
         else IfEqual, OutputVarControl, Button17
-            Help := "Включать на сложности`nУльтра"
+            Help := "Выводит на экран, что сейчас free time"
         else IfEqual, OutputVarControl, Button18
-            Help := "Сообщает, что крипы уже у первой`nбашни"
+            Help := "Включать на сложности`nУльтра"
         else IfEqual, OutputVarControl, Button19
-            Help := "Сообщает, что крипы уже у второй`nбашни"
+            Help := "Сообщает, что крипы уже у первой`nбашни"
         else IfEqual, OutputVarControl, Button20
-            Help := "Сообщает, что крипы уже у третьей`nбашни"
+            Help := "Сообщает, что крипы уже у второй`nбашни"
         else IfEqual, OutputVarControl, Button21
+            Help := "Сообщает, что крипы уже у третьей`nбашни"
+        else IfEqual, OutputVarControl, Button22
             Help := "Сохраняет ваши изменения в ini файл"
         else IfEqual, OutputVarControl, Edit1
             Help := "Количество золота для срабатывания`nзакупки кликером"
@@ -835,5 +892,25 @@ RunScript:
     {
         Run, %A_WorkingDir%\Scripts\%ScriptsListBox%
     }
+    return
+}
+
+CreateConfig:
+{
+    MsgBox, Выберите папку с игрой Dota 2
+    FileSelectFolder, Folder
+    Folder := RegExReplace(Folder, "\\$")
+    IfExist, %Folder%/game/dota/cfg/gamestate_integration/
+    {
+        FileCopy, SystemScripts/gamestate_integration_test.cfg, %Folder%/game/dota/cfg/gamestate_integration/gamestate_integration_test.cfg , 1
+    }
+    Else
+    {
+        FileCreateDir, %Folder%/game/dota/cfg/gamestate_integration/
+        FileCopy, SystemScripts/gamestate_integration_test.cfg, %Folder%/game/dota/cfg/gamestate_integration/gamestate_integration_test.cfg , 1
+    }
+    IniWrite, false, settings.ini, SystemSettings, isfirsttime
+    IniWrite, %Folder%, settings.ini, SystemSettings, gamefolder
+    MsgBox, Перезапустите игру для применения изменений
     return
 }
